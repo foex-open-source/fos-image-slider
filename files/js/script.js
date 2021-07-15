@@ -32,7 +32,6 @@ FOS.region.imageSlider.initSlider = function(config, initJs) {
     if (initJs && typeof initJs == 'function') {
         initJs.call(this, config);
     }
-    console.log(config);
 
     const CSS_PREFIX = 'fos-image-slider';
     const ICON_FULLSCREEN_IS_ON = 'fa-compress';
