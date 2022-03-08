@@ -11,15 +11,15 @@ as
 --
 --  License: MIT
 --
---  GitHub:
+--  GitHub: https://github.com/foex-open-source/fos-image-slider
 --
 --
 -- =============================================================================
 
 -- procedure to pass data to the frontend
 procedure htpclob
-    ( p_clob in out nocopy clob
-    )
+  ( p_clob in out nocopy clob
+  )
 is
     l_chunk varchar2(32000);
     l_clob  clob := p_clob;
@@ -43,10 +43,10 @@ begin
 end htpclob;
 
 function render
-    ( p_region              in apex_plugin.t_region
-    , p_plugin              in apex_plugin.t_plugin
-    , p_is_printer_friendly in boolean
-    )
+  ( p_region              in apex_plugin.t_region
+  , p_plugin              in apex_plugin.t_plugin
+  , p_is_printer_friendly in boolean
+  )
 return apex_plugin.t_region_render_result
 as
     l_result                  apex_plugin.t_region_render_result;
@@ -83,6 +83,7 @@ as
     l_fullscreen_mode         boolean                    := instr(l_options, 'fullscreen-support'      ) > 0;
     l_hide_navigation         boolean                    := instr(l_options, 'navigation-hide-on-click') > 0;
     l_hide_pagination         boolean                    := instr(l_options, 'pagination-hide-on-click') > 0;
+    l_pause_on_mouse_enter    boolean                    := instr(l_options, 'pause-on-mouse-enter'    ) > 0;
     l_transition              varchar2(255)              := case when l_images_per_region = 1 then l_transition_single_img else l_transition_multi_img end;
 
     l_img_pr_key_val          varchar2(32000);
@@ -93,6 +94,7 @@ as
     l_img_description         pls_integer;
     l_img_buttonurl           pls_integer;
     l_img_buttonlabel         pls_integer;
+    l_img_data_slide          pls_integer;
 
     c_plugin_css_prefix       constant varchar2(100)     := 'fos-image-slider';
     l_image_url               varchar2(32000);
@@ -107,8 +109,9 @@ as
         l_description_val         varchar2(32767) := apex_exec.get_varchar2(l_context, l_img_description);
         l_buttonurl_val           varchar2(32767) := apex_exec.get_varchar2(l_context, l_img_buttonurl  );
         l_buttonlabel_val         varchar2(32767) := apex_exec.get_varchar2(l_context, l_img_buttonlabel);
+        l_data_slide_val          varchar2(32767) := case when l_img_data_slide is not null then apex_exec.get_varchar2(l_context, l_img_data_slide ) else '' end;
     begin
-        sys.htp.p('<div class="'||c_plugin_css_prefix||'-box">'); -- box
+        sys.htp.p('<div class="'||c_plugin_css_prefix||'-box" data-slide="'|| l_data_slide_val ||'">'); -- box
 
         if l_title_val is not null or l_subtitle_val is not null then
             sys.htp.p('<div class="'||c_plugin_css_prefix||'-box-header">'); -- header
@@ -145,7 +148,8 @@ as
 
 begin
     --debug
-    if apex_application.g_debug then
+    if apex_application.g_debug and substr(:DEBUG,6) >= 6
+    then
         apex_plugin_util.debug_region
             ( p_plugin => p_plugin
             , p_region => p_region
@@ -175,6 +179,10 @@ begin
         l_img_description   := apex_exec.get_column_position(l_context, 'DESCRIPTION');
         l_img_buttonurl     := apex_exec.get_column_position(l_context, 'BUTTONURL'  );
         l_img_buttonlabel   := apex_exec.get_column_position(l_context, 'BUTTONLABEL');
+        if instr(l_source, 'DATA_SLIDE') > 0
+        then
+            l_img_data_slide    := apex_exec.get_column_position(l_context, 'DATA_SLIDE' );
+        end if;
     end if;
 
     -- region container
@@ -269,6 +277,7 @@ begin
     apex_json.write('fullscreenSupport'      , l_fullscreen_mode            );
     apex_json.write('hideNavigationOnClick'  , l_hide_navigation            );
     apex_json.write('hidePaginationOnClick'  , l_hide_pagination            );
+    apex_json.write('pauseOnMouseEnter'      , l_pause_on_mouse_enter       );
 
     --closing the query context
     apex_exec.close(l_context);
@@ -286,9 +295,9 @@ end render;
 
 
 function ajax
-    ( p_region in apex_plugin.t_region
-    , p_plugin in apex_plugin.t_plugin
-    )
+  ( p_region in apex_plugin.t_region
+  , p_plugin in apex_plugin.t_plugin
+  )
 return apex_plugin.t_region_ajax_result
 as
     l_result apex_plugin.t_region_ajax_result;
@@ -322,7 +331,7 @@ as
 begin
 
     -- standard debugging
-    if apex_application.g_debug
+    if apex_application.g_debug and substr(:DEBUG,6) >= 6
     then
         apex_plugin_util.debug_region
           ( p_plugin  => p_plugin
