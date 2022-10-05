@@ -82,6 +82,8 @@ FOS.region.imageSlider.initSlider = function(config, initJs) {
         imageSizeCustom
     } = config;
     let swiperCfg = {
+        observer: true,
+        observeSlideChildren: true,
         keyboard: {
             enabled: true,
             onlyInViewport: true
@@ -140,6 +142,8 @@ FOS.region.imageSlider.initSlider = function(config, initJs) {
     if (thumbnailsEnabled) {
         let thumbsEl = sliderContainerEl.querySelector(`.${CSS_PREFIX}-thumbnails`);
         thumbsSwiper = new Swiper(thumbsEl, {
+            observer: true,
+            observeSlideChildren: true,
             spaceBetween: 6,
             slidesPerView: thumbnails == 0 ? 'auto' : parseInt(thumbnails),
             watchSlidesVisibility: true,
