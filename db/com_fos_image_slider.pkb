@@ -170,7 +170,12 @@ begin
         l_img_url:= apex_exec.get_column_position(l_context, l_col_src_url);
     else
         l_img_pr_key_pos := apex_exec.get_column_position(l_context, l_col_src_pr_key);
-        l_image_url := 'wwv_flow.show?p_flow_id='|| v('APP_ID')||'&p_flow_step_id='||v('APP_PAGE_ID')||'&p_instance='||v('APP_SESSION')||'&p_debug='||CASE apex_application.g_debug WHEN TRUE THEN 'YES' ELSE 'NO' END||'&p_request=PLUGIN='||l_ajax_id||'&p_widget_action=DISPLAY_IMAGE';
+        l_image_url := 'wwv_flow.show?p_flow_id='|| v('APP_ID')
+                            ||'&p_flow_step_id='||v('APP_PAGE_ID')
+                            ||'&p_instance='||v('APP_SESSION')
+                            ||'&p_debug='||CASE apex_application.g_debug WHEN TRUE THEN 'YES' ELSE 'NO' END
+                            ||'&p_request=PLUGIN='||l_ajax_id
+                            ||'&p_widget_action=DISPLAY_IMAGE';
     end if;
 
     if l_desc_box then
@@ -189,7 +194,7 @@ begin
     sys.htp.p('<div class="'||c_plugin_css_prefix||'-container">');
 
     --
-    sys.htp.p('<div class="swiper-container fos-image-slider-gallery">');
+    sys.htp.p('<div class="swiper-container '||c_plugin_css_prefix||'-gallery">');
 
     --fullscreen
     if l_fullscreen_mode then
@@ -278,6 +283,8 @@ begin
     apex_json.write('hideNavigationOnClick'  , l_hide_navigation            );
     apex_json.write('hidePaginationOnClick'  , l_hide_pagination            );
     apex_json.write('pauseOnMouseEnter'      , l_pause_on_mouse_enter       );
+    apex_json.write('pageItemsToSubmit'      , p_region.ajax_items_to_submit);
+    apex_json.write('pluginUri'              , l_ajax_id                    );
 
     --closing the query context
     apex_exec.close(l_context);
@@ -293,15 +300,55 @@ begin
 
 end render;
 
-
-function ajax
+procedure ajax_url_ds
   ( p_region in apex_plugin.t_region
   , p_plugin in apex_plugin.t_plugin
   )
-return apex_plugin.t_region_ajax_result
-as
-    l_result apex_plugin.t_region_ajax_result;
+as  
+    l_region_id               p_region.static_id%type    := nvl(p_region.static_id, p_region.id);
+    l_source                  p_region.source%type       := p_region.source;
+    
+    l_col_src_url             p_region.attribute_06%type := p_region.attribute_06;
 
+    l_context                 apex_exec.t_context;
+    l_img_url                 pls_integer;
+begin
+    --execute the query
+    l_context := apex_exec.open_query_context
+        ( p_location        => apex_exec.c_location_local_db
+        , p_sql_query       => l_source
+        , p_total_row_count => true
+        );
+    
+    l_img_url:= apex_exec.get_column_position(l_context, l_col_src_url);
+
+    -- creating the JSON
+    apex_json.initialize_clob_output;
+    apex_json.open_object;
+    apex_json.open_array('result');
+    while apex_exec.next_row(l_context)
+    loop
+        -- the source URL of the image
+        apex_json.write(apex_exec.get_varchar2(l_context, l_img_url));
+    end loop;
+    apex_json.close_array;
+    apex_json.close_object;
+
+    --closing the query context
+    apex_exec.close(l_context);
+    
+    -- send it back to the frontend
+    sys.htp.p(apex_json.get_clob_output);
+
+    apex_json.free_output;
+
+end ajax_url_ds;
+
+procedure ajax_blob_ds
+  ( p_region in apex_plugin.t_region
+  , p_plugin in apex_plugin.t_plugin
+  )
+as
     l_ajax_id                 varchar2(4000)             := apex_plugin.get_ajax_identifier;
     l_region_id               p_region.static_id%type    := nvl(p_region.static_id, p_region.id);
     l_source                  p_region.source%type       := p_region.source;
@@ -327,17 +374,7 @@ as
     l_img_pr_key              varchar2(32000) := apex_application.g_x01;
 
     l_file_size   pls_integer;
-
 begin
-
-    -- standard debugging
-    if apex_application.g_debug and substr(:DEBUG,6) >= 6
-    then
-        apex_plugin_util.debug_region
-          ( p_plugin  => p_plugin
-          , p_region  => p_region
-          );
-    end if;
 
     -- add filter on the primary key(using the value from the request)
     apex_exec.add_filter
@@ -386,6 +423,109 @@ begin
 
     -- download the file
     wpg_docload.download_file(l_img_blob_val);
+end ajax_blob_ds;
+
+
+procedure ajax_blob_urls
+  ( p_region in apex_plugin.t_region
+  , p_plugin in apex_plugin.t_plugin
+  )
+as
+    l_ajax_id                 varchar2(4000)        := apex_plugin.get_ajax_identifier;
+    l_source                p_region.source%type    := p_region.source;
+
+
+    l_col_src_pr_key          p_region.attribute_02%type := p_region.attribute_02;
+    l_col_src_blob            p_region.attribute_03%type := p_region.attribute_03;
+
+    l_img_pr_key_pos        pls_integer;
+    l_base_image_url        varchar2(32000);
+    l_img_pr_key_val        varchar2(32000);
+    l_context               apex_exec.t_context;    
+begin  
+    l_base_image_url := 'wwv_flow.show?p_flow_id='|| v('APP_ID')
+                    ||'&p_flow_step_id='||v('APP_PAGE_ID')
+                    ||'&p_instance='||v('APP_SESSION')
+                    ||'&p_debug='||CASE apex_application.g_debug WHEN TRUE THEN 'YES' ELSE 'NO' END
+                    ||'&p_request=PLUGIN='||l_ajax_id
+                    ||'&p_widget_action=DISPLAY_IMAGE';
+
+    --execute the query
+    l_context := apex_exec.open_query_context
+        ( p_location        => apex_exec.c_location_local_db
+        , p_sql_query       => l_source
+        , p_total_row_count => true
+        );
+
+    l_img_pr_key_pos := apex_exec.get_column_position(l_context, l_col_src_pr_key);
+
+    -- creating the JSON
+    apex_json.initialize_clob_output;
+    apex_json.open_object;
+    apex_json.open_array('result');
+    
+    while apex_exec.next_row(l_context)
+    loop
+        l_img_pr_key_val := apex_exec.get_varchar2(l_context, l_img_pr_key_pos);
+
+        -- the source URL of the image
+        apex_json.write(l_base_image_url || '&x01='||l_img_pr_key_val);
+    end loop;
+    apex_json.close_array;
+    apex_json.close_object;
+
+    --closing the query context
+    apex_exec.close(l_context);
+
+        
+    -- send it back to the frontend
+    sys.htp.p(apex_json.get_clob_output);
+
+    apex_json.free_output;
+
+end ajax_blob_urls;
+
+
+function ajax
+  ( p_region in apex_plugin.t_region
+  , p_plugin in apex_plugin.t_plugin
+  )
+return apex_plugin.t_region_ajax_result
+as
+    l_result apex_plugin.t_region_ajax_result;
+
+    l_source_type             p_region.attribute_01%type := p_region.attribute_01;
+
+    l_request_type            varchar2(32000) := apex_application.g_x02;
+begin
+
+    -- standard debugging
+    if apex_application.g_debug and substr(:DEBUG,6) >= 6
+    then
+        apex_plugin_util.debug_region
+          ( p_plugin  => p_plugin
+          , p_region  => p_region
+          );
+    end if;
+
+    if l_source_type = 'url'
+    then
+        ajax_url_ds
+        ( p_region => p_region
+        , p_plugin => p_plugin
+        );
+    elsif l_request_type = 'BLOB_URLS'
+    then
+        ajax_blob_urls
+        ( p_region => p_region
+        , p_plugin => p_plugin
+        );
+    else
+        ajax_blob_ds
+        ( p_region => p_region
+        , p_plugin => p_plugin
+        );
+    end if;
 
     return l_result;
 
