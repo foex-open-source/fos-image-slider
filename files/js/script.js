@@ -28,6 +28,9 @@ FOS.region.imageSlider = FOS.region.imageSlider || {};
  * @param {number}        [config.speed]                 Duration of transition between slides (in ms). Default 300ms.
  * @param {number}        [config.spaceBetween]          Distance between slides in px.
  * @param {object}        [config.breakpoints]           Allows to set different parameter for different responsive breakpoints (screen sizes).
+ * @param {string}        [config.pluginUri]             Plugin AJAX URI.
+ * @param {string}        [config.pageItemsToSubmit]     Page items submitted on refresh.
+ * @param {string}        [config.requestType]           Request parameter to be sent on plugin AJAX call.
  * @param {function}      [initFn]                       Javascript initialization function which allows you to override any settings before the slider is created.
  */
 
@@ -81,7 +84,8 @@ FOS.region.imageSlider.initSlider = function(config, initJs) {
         imageSize = 'cover',
         imageSizeCustom,
         pluginUri,
-        pageItemsToSubmit
+        pageItemsToSubmit,
+        requestType
     } = config;
     let swiperCfg = {
         observer: true,
@@ -213,18 +217,20 @@ FOS.region.imageSlider.initSlider = function(config, initJs) {
         apex.event.trigger(`#${regionId}`, eventName, paramsObj);
     }
 
-    function refreshSliderUrl() {
+    function updateImageSlider() {
         apex.message.clearErrors();
 
         // always remove all the current slides
         swiper.removeAllSlides();
-        thumbsSwiper.removeAllSlides();
+        if (thumbsSwiper) {
+            thumbsSwiper.removeAllSlides();
+        }
 
         apex.server.plugin(
             pluginUri,
             {
                 //x01 reserved for PK
-                x02: 'BLOB_URLS',
+                x02: requestType,
                 pageItems: pageItemsToSubmit.split(',')
                             .map(id => id.trim())
                             .map(id => `#${id}`)
@@ -245,23 +251,31 @@ FOS.region.imageSlider.initSlider = function(config, initJs) {
                                 <div class="swiper-lazy-preloader"></div>
                             `
                         );
-
-                        thumbsSwiper.addSlide(i,
-                            `
-                                <div class="swiper-slide ${CSS_PREFIX}-thumbnail-slide" 
-                                    style="background-image:url(${element})">
-                                </div>
-                            `
-                        );
+                        
+                        if (thumbsSwiper) {
+                            thumbsSwiper.addSlide(i,
+                                `
+                                    <div class="swiper-slide ${CSS_PREFIX}-thumbnail-slide" 
+                                        style="background-image:url(${element})">
+                                    </div>
+                                `
+                            );
+                        }
                     }
 
                     swiper.update();
-                    thumbsSwiper.update();
+                    if (thumbsSwiper) {
+                        thumbsSwiper.update();
+                    }
 
                     // set the custom sizes here after initialization as some slides may have been duplicated (when loop mode)
                     sliderContainerEl.querySelectorAll(`.${CSS_PREFIX}-gallery .swiper-slide`).forEach(el => {
                         el.style.backgroundSize = imageSize == 'custom' ? imageSizeCustom + '%' : imageSize;
                     });
+                    
+                    if (jsonData.result.length > 0) {                        
+                        swiper.slideTo(0);
+                    }
                 },
                 error: function(xhr, ajaxOptions, thrownError){
 
@@ -325,9 +339,7 @@ FOS.region.imageSlider.initSlider = function(config, initJs) {
         },
 
         refresh(){
-            //if (pluginUri){
-                refreshSliderUrl();            
-            //}
+            updateImageSlider();            
         }        
 
     });
